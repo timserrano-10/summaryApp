@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Upload Legal Document</title>
+  {% load static %}
+  <link rel="stylesheet" href="{% static 'css/detailstyles.css' %}">
+</head>
+<body>
+    <h2>{{ doc.title }}</h2>
+    <h3>Summary:</h3>
+    <p>{{ doc.summary }}</p>
+
+    <h3>Original Text:</h3>
+    <pre>{{ doc.raw_text }}</pre>    
+</body>
+</html>
