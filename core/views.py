@@ -5,6 +5,7 @@ from openai import OpenAI
 from django.shortcuts import render, redirect
 from .forms import DocumentForm
 from .models import Document
+from django.conf import settings
 # import statements
 
 # retrieves API key from API key variable in environment, creates openAI client
@@ -50,36 +51,61 @@ def upload_document(request):
     if request.method == 'POST':
         form = DocumentForm(request.POST, request.FILES)
         if form.is_valid():
+
             # create a document object, not saved yet
             doc = form.save(commit=False)
 
+            # ensures file was uploaded before proceeding 
             if doc.uploaded_file:
                 uploaded_file = request.FILES['uploaded_file']
 
-                # Save uploaded file to a temp location
-                temp_path = os.path.join('media', uploaded_file.name)
-                # reads and writes the file to temp path
-                with open(temp_path, 'wb+') as destination:
+                 # Validate file extension (eg PDF or docx)
+                ext = os.path.splitext(uploaded_file.name)[1].lower()
+                if ext not in ['.pdf', '.docx']:
+                    return render(request, 'core/upload.html', {
+                        'form': form,
+                        'error': 'Only .pdf or .docx files are supported.'
+                    })
+
+
+                # Create unique filename and assign it a unique identifier
+                import uuid
+                filename = f"{uuid.uuid4()}_{uploaded_file.name}"
+
+                uploaded_file_path = os.path.join(settings.MEDIA_ROOT, uploaded_file.name)
+
+                # Ensure media directory exists
+                os.makedirs(settings.MEDIA_ROOT, exist_ok=True)
+
+                # Save file in chunks to destination
+                with open(uploaded_file_path, 'wb+') as destination:
                     for chunk in uploaded_file.chunks():
                         destination.write(chunk)
 
-                # Extract and assign raw text
-                extracted = extract_text_from_file(temp_path)
-                doc.raw_text = extracted
+                # extract text from file
+                try:
+                    doc.raw_text = extract_text_from_file(uploaded_file_path)
+                    # delete file after processing
+                    os.remove(uploaded_file_path)  
+                except Exception as e:
+                    # if file is invalid type then return error
+                    print(f"Error processing file: {e}")
+                    os.remove(uploaded_file_path)
+                    return render(request, 'core/upload.html', {
+                        'form': form,
+                        'error': 'There was a problem reading your file. Please upload a valid .pdf or .docx.'
+                    })
 
-                # remove file after reading
-                os.remove(temp_path)
-
-            # if text is extracted, generate a summary and save it
+            # Summarize and save if extraction succeeded
             if doc.raw_text:
                 doc.summary = summarize_text(doc.raw_text)
 
-            # save document object and return to detail view
+            # go to detail view 
             doc.save()
             return redirect('document_detail', pk=doc.pk)
     else:
         form = DocumentForm()
-    # render upload.html form template. This will load an empty form.
+
     return render(request, 'core/upload.html', {'form': form})
 
 
